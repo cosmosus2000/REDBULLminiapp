@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Видео-магазин</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--tg-theme-bg-color, #ffffff);
+      color: var(--tg-theme-text-color, #000000);
+      padding: 16px;
+      padding-bottom: 80px;
+      min-height: 100vh;
+    }
+    .header { text-align: center; margin-bottom: 20px; }
+    .header h1 { font-size: 22px; margin-bottom: 4px; }
+    .header p { font-size: 14px; color: var(--tg-theme-hint-color, #999); }
+    .video-card {
+      background: var(--tg-theme-secondary-bg-color, #f5f5f5);
+      border-radius: 14px; padding: 14px; margin-bottom: 12px;
+      display: flex; gap: 12px; align-items: center;
+    }
+    .video-thumb {
+      width: 70px; height: 70px; border-radius: 10px; background: #333;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; flex-shrink: 0;
+    }
+    .video-info { flex: 1; min-width: 0; }
+    .video-info h3 { font-size: 15px; margin-bottom: 4px; }
+    .video-info .desc { font-size: 12px; color: var(--tg-theme-hint-color, #999); margin-bottom: 8px; }
+    .video-info .price { font-size: 14px; font-weight: 600; color: #f5a623; }
+    .btn-buy {
+      background: var(--tg-theme-button-color, #2481cc);
+      color: var(--tg-theme-button-text-color, #fff);
+      border: none; padding: 10px 16px; border-radius: 10px;
+      font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    }
+    .bottom-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      padding: 12px 16px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+      background: var(--tg-theme-bg-color, #fff);
+      border-top: 1px solid rgba(128,128,128,0.15);
+      display: flex; gap: 10px;
+    }
+    .btn-suggest {
+      flex: 1;
+      background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+      color: var(--tg-theme-text-color, #000);
+      border: none; padding: 14px; border-radius: 12px;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    .suggest-screen {
+      display: none; position: fixed; inset: 0;
+      background: var(--tg-theme-bg-color, #fff);
+      padding: 16px; z-index: 100; flex-direction: column;
+    }
+    .suggest-screen.active { display: flex; }
+    .suggest-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .btn-back {
+      background: none; border: none; font-size: 24px; cursor: pointer;
+      color: var(--tg-theme-text-color, #000); padding: 4px 8px;
+    }
+    .suggest-header h2 { font-size: 18px; }
+    .upload-zone {
+      border: 2px dashed var(--tg-theme-hint-color, #ccc);
+      border-radius: 16px; padding: 40px 20px; text-align: center;
+      margin-bottom: 20px; cursor: pointer;
+    }
+    .upload-icon { font-size: 48px; margin-bottom: 12px; }
+    .upload-zone p { font-size: 14px; color: var(--tg-theme-hint-color, #999); }
+    .preview { display: none; margin-bottom: 20px; }
+    .preview.active { display: block; }
+    .preview video { width: 100%; border-radius: 12px; margin-bottom: 10px; }
+    .preview .filename { font-size: 13px; color: var(--tg-theme-hint-color, #999); text-align: center; }
+    .btn-submit {
+      width: 100%;
+      background: var(--tg-theme-button-color, #2481cc);
+      color: var(--tg-theme-button-text-color, #fff);
+      border: none; padding: 16px; border-radius: 12px;
+      font-size: 16px; font-weight: 600; cursor: pointer; margin-top: auto;
+    }
+    .btn-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+    .empty { text-align: center; padding: 60px 20px; color: var(--tg-theme-hint-color, #999); }
+    .empty .icon { font-size: 48px; margin-bottom: 12px; }
+    <body>
+  <div id="mainScreen">
+    <div class="header">
+      <h1>🎬 Видео-магазин</h1>
+      <p>Выбери видео и оплати звёздами</p>
+    </div>
+    <div id="videoList"></div>
+    <div class="bottom-bar">
+      <button class="btn-suggest" onclick="openSuggest()">
+        📤 Предложка
+      </button>
+    </div>
+  </div>
+
+  <div class="suggest-screen" id="suggestScreen">
+    <div class="suggest-header">
+      <button class="btn-back" onclick="closeSuggest()">←</button>
+      <h2>Загрузить своё видео</h2>
+    </div>
+    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">📹</div>
+      <p>Нажми, чтобы выбрать видео</p>
+      <p style="margin-top:8px; font-size:12px;">MP4, до 50 МБ</p>
+    </div>
+    <input type="file" id="fileInput" accept="video/*" style="display:none">
+    <div class="preview" id="preview">
+      <video id="previewVideo" controls></video>
+      <div class="filename" id="fileName"></div>
+    </div>
+    <button class="btn-submit" id="submitBtn" disabled onclick="submitVideo()">
+      Отправить на модерацию
+    </button>
+  </div>
+    
+  </style>
+</head>
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    const videos = [
+      { id: 1, title: "Видео #1", desc: "Описание видео", price: 30, emoji: "🎥" },
+      { id: 2, title: "Видео #2", desc: "Описание видео", price: 30, emoji: "🎬" },
+      { id: 3, title: "Видео #3", desc: "Описание видео", price: 30, emoji: "📹" }
+    ];
+
+    function renderVideos() {
+      const list = document.getElementById('videoList');
+      if (videos.length === 0) {
+        list.innerHTML = '<div class="empty"><div class="icon">📭</div>Пока нет видео</div>';
+        return;
+      }
+      list.innerHTML = videos.map(v => `
+        <div class="video-card">
+          <div class="video-thumb">${v.emoji}</div>
+          <div class="video-info">
+            <h3>${v.title}</h3>
+            <div class="desc">${v.desc}</div>
+            <div class="price">⭐ ${v.price} звёзд</div>
+          </div>
+          <button class="btn-buy" onclick="buyVideo(${v.id})">Купить</button>
+        </div>
+      `).join('');
+    }
+
+    async function buyVideo(videoId) {
+      tg.HapticFeedback.impactOccurred('medium');
+      const video = videos.find(v => v.id === videoId);
+      if (!video) return;
+      tg.showPopup({
+        title: 'Покупка',
+        message: `Сейчас создадим счёт на ${video.price} ⭐ для "${video.title}"`,
+        buttons: [{ type: 'ok' }]
+      });
+    }
+
+    let selectedFile = null;
+
+    function openSuggest() {
+      tg.HapticFeedback.impactOccurred('light');
+      document.getElementById('suggestScreen').classList.add('active');
+    }
+
+    function closeSuggest() {
+      document.getElementById('suggestScreen').classList.remove('active');
+      resetSuggest();
+    }
+
+    function resetSuggest() {
+      selectedFile = null;
+      document.getElementById('preview').classList.remove('active');
+      document.getElementById('submitBtn').disabled = true;
+      document.getElementById('fileInput').value = '';
+      document.getElementById('uploadZone').style.display = 'block';
+    }
+
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (file.size > 50 * 1024 * 1024) {
+        tg.showAlert('Файл слишком большой. Максимум 50 МБ.');
+        return;
+      }
+      selectedFile = file;
+      document.getElementById('fileName').textContent = file.name;
+      document.getElementById('uploadZone').style.display = 'none';
+      const preview = document.getElementById('preview');
+      const videoEl = document.getElementById('previewVideo');
+      videoEl.src = URL.createObjectURL(file);
+      preview.classList.add('active');
+      document.getElementById('submitBtn').disabled = false;
+    });
+
+    function submitVideo() {
+      if (!selectedFile) return;
+      tg.HapticFeedback.notificationOccurred('success');
+      tg.showPopup({
+        title: 'Готово!',
+        message: `Файл "${selectedFile.name}" выбран. Отправка на сервер будет добавлена позже.`,
+        buttons: [{ type: 'ok' }]
+      });
+    }
+
+    renderVideos();
+  </script>
+</body>
+</html>
